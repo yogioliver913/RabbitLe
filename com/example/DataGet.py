@@ -4,9 +4,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import schedule
 from pandas_datareader import data as pdr
+from com.example import Tusharetoken
 
 # Tushare Pro配置（A股数据）
-ts_token = ''  # 在tushare.pro官网注册获取
+ts_token = Tusharetoken.get()  # 在tushare.pro官网注册获取
 ts.set_token(ts_token)
 pro = ts.pro_api()
 
@@ -20,12 +21,18 @@ def get_buffett_index(market="A"):
     if market == "A":
         # 获取A股总市值（沪深两市）
         # 获取深圳和上海市场20200320各板块交易指定字段的数据
-        df = pro.daily_info(trade_date='20250724', exchange='SZ,SH', fields='trade_date,ts_code,ts_name,total_mv,float_mv,amount,ts_name,pe')
-        total_mkt_val = df.iloc[0].total_mv
+        df = pro.daily_info(trade_date='20250724', exchange='SH', fields='trade_date,ts_code,ts_name,total_mv,float_mv,amount,ts_name,pe')
+        total_SH_val = df[df['ts_code'] == 'SH_MARKET'].iloc[0].total_mv
+
+        df = pro.daily_info(trade_date='20250724', exchange='SZ',
+                            fields='trade_date,ts_code,ts_name,total_mv,float_mv,amount,ts_name,pe')
+        total_SZ_val = df[df['ts_code'] == 'SZ_MARKET'].iloc[0].total_mv
+        total_mkt_val = total_SH_val + total_SZ_val
+
 
         # 获取中国最新GDP（年度数据）
         gdp_data = pro.cn_gdp()  # 从Tushare获取GDP
-        latest_gdp = gdp_data.iloc[0].gdp * 1e8  # 单位：亿元[2](@ref)
+        latest_gdp = gdp_data.iloc[0].gdp  # 单位：亿元[2](@ref)
 
         buffett_ratio = total_mkt_val / latest_gdp
         return buffett_ratio * 100  # 转换为百分比
