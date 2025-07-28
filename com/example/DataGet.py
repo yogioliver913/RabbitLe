@@ -6,7 +6,7 @@ import schedule
 from pandas_datareader import data as pdr
 
 # Tushare Pro配置（A股数据）
-ts_token = 'c06a3a2a2c8df839000be145791f9104486603a0e04f18a34b90b002'  # 在tushare.pro官网注册获取
+ts_token = ''  # 在tushare.pro官网注册获取
 ts.set_token(ts_token)
 pro = ts.pro_api()
 
