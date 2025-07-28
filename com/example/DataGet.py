@@ -6,7 +6,7 @@ import schedule
 from pandas_datareader import data as pdr
 
 # Tushare Pro配置（A股数据）
-ts_token = ''  # 在tushare.pro官网注册获取
+ts_token = 'c06a3a2a2c8df839000be145791f9104486603a0e04f18a34b90b002'  # 在tushare.pro官网注册获取
 ts.set_token(ts_token)
 pro = ts.pro_api()
 
@@ -19,21 +19,9 @@ def get_buffett_index(market="A"):
     """计算巴菲特指数（总市值/GDP）"""
     if market == "A":
         # 获取A股总市值（沪深两市）
-
-        df = pro.daily_basic(ts_code="000001.SH", fields="ts_code,trade_date,total_mv")
-        if df.empty:
-            print("No data found for the given parameters.")
-            sh_mkt_val = 0
-        else:
-            sh_mkt_val = df.iloc[0].total_mv
-
-        df = pro.daily_basic(ts_code="399001.SZ", fields="ts_code,trade_date,total_mv")  # 深证成指[4](@ref)
-        if df.empty:
-            print("No data found for the given parameters.")
-            sz_mkt_val = 0
-        else:
-            sz_mkt_val = df.iloc[0].total_mv
-        total_mkt_val = sh_mkt_val + sz_mkt_val  # 单位：亿元
+        # 获取深圳和上海市场20200320各板块交易指定字段的数据
+        df = pro.daily_info(trade_date='20250724', exchange='SZ,SH', fields='trade_date,ts_code,ts_name,total_mv,float_mv,amount,ts_name,pe')
+        total_mkt_val = df.iloc[0].total_mv
 
         # 获取中国最新GDP（年度数据）
         gdp_data = pro.cn_gdp()  # 从Tushare获取GDP

@@ -1,4 +1,4 @@
-name: finance-analysis-env
+name: RabbitLe
 channels:
   - conda-forge
   - defaults
