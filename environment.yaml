@@ -1,0 +1,14 @@
+name: finance-analysis-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.8
+  - pandas
+  - matplotlib
+  - yfinance
+  - schedule
+  - pandas-datareader
+  - pip
+  - pip:
+      - tushare
