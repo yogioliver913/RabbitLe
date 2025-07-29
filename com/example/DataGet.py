@@ -16,17 +16,23 @@ SP500_TICKER = "^GSPC"  # 标普500指数
 US10Y_TICKER = "^TNX"   # 10年期美债收益率
 
 
+
+
 def get_buffett_index(market="A"):
     """计算巴菲特指数（总市值/GDP）"""
     if market == "A":
         # 获取A股总市值（沪深两市）
         # 获取深圳和上海市场20200320各板块交易指定字段的数据
-        df = pro.daily_info(trade_date='20250724', exchange='SH', fields='trade_date,ts_code,ts_name,total_mv,float_mv,amount,ts_name,pe')
+        df = pro.daily_info(start_date='20160101', end_date='20250729',ts_code='SH_MARKET',exchange='SH',
+                            fields='trade_date,ts_code,ts_name,com_count,total_mv,float_mv,amount,pe')
         total_SH_val = df[df['ts_code'] == 'SH_MARKET'].iloc[0].total_mv
+        df.to_excel('SH_MARKET_20160101_20250630.xlsx', index=False)
 
-        df = pro.daily_info(trade_date='20250724', exchange='SZ',
-                            fields='trade_date,ts_code,ts_name,total_mv,float_mv,amount,ts_name,pe')
+        df = pro.daily_info(start_date='20160101', end_date='20250729',ts_code='SZ_MARKET',exchange='SZ',
+                            fields='trade_date,ts_code,ts_name,com_count,total_mv,float_mv,amount,pe')
         total_SZ_val = df[df['ts_code'] == 'SZ_MARKET'].iloc[0].total_mv
+        df.to_excel('SZ_MARKET_20160101_20250630.xlsx', index=False)
+
         total_mkt_val = total_SH_val + total_SZ_val
 
 
@@ -50,12 +56,28 @@ def get_buffett_index(market="A"):
 def calc_equity_bond_yield(market="A"):
     """计算股债收益率差（股票市盈率倒数 - 债券收益率）"""
     if market == "A":
-        # A股沪深300盈利率
+        # A股沪深300市盈率
         hs300_pe = pro.index_daily(ts_code="000300.SH").iloc[0].pe  # 沪深300PE[4](@ref)
         equity_yield = (1 / hs300_pe) * 100  # 转换为收益率%
 
         # 中国10年期国债收益率
-        bond_yield = pro.bond_yield(ts_code="010107.IB").iloc[0].yield_  # 国债代码示例
+        bond_yield_df = pro.yc_cb(**{
+            "ts_code": "1001.CB",
+            "curve_type": 0,
+            "trade_date": "",
+            "start_date": 20250701,
+            "end_date": 20250724,
+            "curve_term": 10,
+            "limit": 100,
+            "offset": ""
+        }, fields=[
+            "trade_date",
+            "ts_code",
+            "curve_name",
+            "curve_type",
+            "curve_term",
+            "yield"
+        ])  # 国债代码示例
 
         return equity_yield - bond_yield
 
@@ -76,13 +98,13 @@ def generate_valuation_report():
     """生成估值报告并绘图"""
     # 计算关键指标
     buffett_cn = get_buffett_index("A")
-    buffett_us = get_buffett_index("US")
+    #buffett_us = get_buffett_index("US")
     yield_gap_cn = calc_equity_bond_yield("A")
     yield_gap_us = calc_equity_bond_yield("US")
 
     # 巴菲特指数信号判断[2,3](@ref)
-    buffett_signal_cn = "低估" if buffett_cn < 75 else ("高估" if buffett_cn > 120 else "合理")
-    buffett_signal_us = "低估" if buffett_us < 75 else ("高估" if buffett_us > 120 else "合理")
+    #buffett_signal_cn = "低估" if buffett_cn < 75 else ("高估" if buffett_cn > 120 else "合理")
+    #buffett_signal_us = "低估" if buffett_us < 75 else ("高估" if buffett_us > 120 else "合理")
 
     # 股债收益差信号（历史分位）
     yield_signal_cn = "股票占优" if yield_gap_cn > 1.5 else "债券占优"

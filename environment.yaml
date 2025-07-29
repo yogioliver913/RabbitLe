@@ -9,6 +9,7 @@ dependencies:
   - yfinance
   - schedule
   - pandas-datareader
+  - openpyxl
   - pip
   - pip:
       - tushare
