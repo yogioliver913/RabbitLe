@@ -7,7 +7,7 @@ DB_PATH = '/Users/xile/PycharmProjects/RabbitLe/com/init/mydb.db'
 TABLE_NAME = 'CN_MAKET_BASIC_ALL'
 
 def createEmptyTable():
-    conn = sqlite3.connect('example.db')
+    conn = sqlite3.connect(DB_PATH)
     try:
         cursor = conn.cursor()
         create = '''
