@@ -23,7 +23,7 @@ def refresh_maotai_data():
 动态调整：牛市中可容忍稍低夏普（>1.2），熊市中需严守索提诺>1.0的底线。
 '''
 def calc_maotai_data():
-    df = pd.read_excel('data/茅台前复权日线.xlsx', sheet_name='茅台前复权日线')  # 指定工作表
+    df = pd.read_excel('data/maotai_daily_20150101.xlsx', sheet_name='茅台前复权日线')  # 指定工作表
     # 假设df为DataFrame，含日期(date)和日收益率(pct_chg)
     # df_sorted = df.sort_values(by='列名', ascending=True)
 
