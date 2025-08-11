@@ -17,8 +17,9 @@ class MA20Strategy:
         self.results = None  # 存储回测结果
         self.data_path = data_path
 
+    # 修改load_data方法以支持Excel文件和特殊日期格式
     def load_data(self, data_path=None):
-        """加载股票数据"""
+        """加载股票数据，支持Excel文件和20150101格式日期"""
         try:
             # 如果提供了新的路径则使用新路径，否则使用初始化时的路径
             path = data_path if data_path else self.data_path
@@ -26,15 +27,56 @@ class MA20Strategy:
             if not path or not os.path.exists(path):
                 raise FileNotFoundError("数据文件不存在")
 
-            # 读取CSV数据，假设包含日期、开盘价、最高价、最低价、收盘价、成交量等字段
-            self.data = pd.read_csv(
-                path,
-                parse_dates=['trade_date'],  # 解析日期列
-                index_col='trade_date'  # 将日期设为索引
-            )
+            # 根据文件扩展名选择合适的读取方法
+            if path.endswith(('.xlsx', '.xls')):
+                # 读取Excel文件，尝试不同的引擎处理可能的格式问题
+                try:
+                    self.data = pd.read_excel(
+                        path,
+                        parse_dates=['trade_date'],  # 尝试自动解析日期
+#                        engine='openpyxl'  # 用于处理.xlsx文件
+                    )
+                except:
+                    # 备用引擎
+                    self.data = pd.read_excel(
+                        path,
+                        parse_dates=['trade_date'],
+#                        engine='xlrd'  # 用于处理旧版.xls文件
+                    )
+            else:
+                # 读取CSV文件，尝试不同编码
+                encodings = ['utf-8', 'gbk', 'gb2312', 'utf-16']
+                for encoding in encodings:
+                    try:
+                        self.data = pd.read_csv(
+                            path,
+                            parse_dates=['trade_date'],
+                            encoding=encoding
+                        )
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    raise UnicodeDecodeError("无法解析文件编码，请检查文件格式")
 
-            # 确保数据按日期排序
-            self.data.sort_index(inplace=True)
+            # 处理20150101格式的日期（整数或字符串）
+            if not pd.api.types.is_datetime64_any_dtype(self.data['trade_date']):
+                # 尝试将日期列转换为字符串，再转换为 datetime
+                self.data['trade_date'] = pd.to_datetime(
+                    self.data['trade_date'].astype(str),
+                    format='%Y%m%d',
+                    errors='coerce'
+                )
+
+                # 检查是否有无法转换的日期
+                invalid_dates = self.data['trade_date'].isna().sum()
+                if invalid_dates > 0:
+                    print(f"警告：有 {invalid_dates} 个日期格式无效，已转换为NaT")
+                    # 移除无效日期的行
+                    self.data = self.data.dropna(subset=['trade_date'])
+
+            # 将日期设为索引并排序
+            self.data = self.data.set_index('trade_date').sort_index()
 
             print(f"数据加载成功，共 {len(self.data)} 条记录")
             print(f"数据时间范围: {self.data.index[0].date()} 至 {self.data.index[-1].date()}")

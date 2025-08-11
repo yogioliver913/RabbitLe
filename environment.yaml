@@ -10,6 +10,7 @@ dependencies:
   - schedule
   - pandas-datareader
   - openpyxl
+  - xlrd >= 2.0.1
   - pip
   - pip:
       - tushare
