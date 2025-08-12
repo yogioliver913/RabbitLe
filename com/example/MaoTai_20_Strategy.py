@@ -6,16 +6,17 @@ from datetime import datetime
 import os
 
 # 设置中文显示
-plt.rcParams["font.family"] = ["SimHei", "WenQuanYi Micro Hei", "Heiti TC"]
+plt.rcParams["font.family"] = ["Arial Unicode MS","STHeiti","DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False  # 解决负号显示问题
 
 
 class MA20Strategy:
-    def __init__(self, data_path=None):
+    def __init__(self, data_path=None,window=20):
         """初始化策略"""
         self.data = None  # 存储股票数据
         self.results = None  # 存储回测结果
         self.data_path = data_path
+        self.MA_Day = f"MA{window}"
 
     # 修改load_data方法以支持Excel文件和特殊日期格式
     def load_data(self, data_path=None):
@@ -94,16 +95,17 @@ class MA20Strategy:
 
         try:
             # 计算20日均线
-            self.data['MA20'] = self.data['close'].rolling(window=20).mean()
+            ma_day = self.MA_Day
+            self.data[ma_day] = self.data['close'].rolling(ma_day).mean()
 
-            # 生成信号：价格上穿20日均线时买入(1)，下穿时卖出(-1)，无信号(0)
+            # 生成信号：价格上穿window日均线时买入(1)，下穿时卖出(-1)，无信号(0)
             self.data['signal'] = 0
 
             # 价格上穿20日均线
-            self.data.loc[self.data['close'] > self.data['MA20'], 'signal'] = 1
+            self.data.loc[self.data['close'] > self.data[ma_day], 'signal'] = 1
 
             # 价格下穿20日均线
-            self.data.loc[self.data['close'] < self.data['MA20'], 'signal'] = -1
+            self.data.loc[self.data['close'] < self.data[ma_day], 'signal'] = -1
 
             # 确保信号只在交叉点变化时产生
             self.data['position'] = self.data['signal'].diff()
@@ -115,7 +117,7 @@ class MA20Strategy:
             print(f"生成信号失败: {str(e)}")
             return False
 
-    def backtest(self, initial_capital=1000000):
+    def backtest(self, initial_capital=1000000.0, slippage=0.0002, commision_rate=0.001, bottom_cash=1000):
         """回测策略"""
         if self.data is None or 'position' not in self.data.columns:
             print("请先加载数据并生成交易信号")
@@ -126,9 +128,9 @@ class MA20Strategy:
             backtest_data = self.data.copy()
 
             # 初始化资金和持仓
-            backtest_data['cash'] = initial_capital
+            backtest_data['cash'] = float(initial_capital)
             backtest_data['shares'] = 0  # 持有股份数量
-            backtest_data['total_assets'] = initial_capital  # 总资产
+            backtest_data['total_assets'] = float(initial_capital)  # 总资产
 
             current_cash = initial_capital
             current_shares = 0
@@ -140,21 +142,34 @@ class MA20Strategy:
 
                 # 买入信号
                 if position == 2:  # 从-1变为1，实际差值为2
-                    if current_cash > 0:
+                    if current_cash-bottom_cash > 0:
+                        # 滑点买入
+                        trade_price = close_price * (1+slippage)
                         # 计算可购买的最大股数（假设整手买卖，1手=100股）
-                        max_shares = (current_cash // (close_price * 100)) * 100
+                        max_shares = (current_cash // (trade_price * 100)) * 100
                         if max_shares > 0:
-                            current_shares += max_shares
-                            current_cash -= max_shares * close_price
-                            print(
-                                f"{date.date()}: 买入 {max_shares} 股，价格 {close_price:.2f}，剩余资金 {current_cash:.2f}")
-
+                            trade_amount = max_shares * trade_price
+                            commission = max(trade_amount * commision_rate, 5)
+                            total_cost = trade_amount + commission
+                            if current_cash >= total_cost:
+                                current_shares += max_shares
+                                current_cash -= total_cost
+                                print(
+                                    f"{date.date()}: 买入 {max_shares} 股，价格 {trade_price:.2f}，剩余资金 {current_cash:.2f}")
+                            else:
+                                print(f"{date.date()}:资金不足，无法完成买入")
                 # 卖出信号
                 elif position == -2:  # 从1变为-1，实际差值为-2
                     if current_shares > 0:
-                        current_cash += current_shares * close_price
+                        trade_price = close_price * (1-slippage)
+                        trade_amount = current_shares * trade_price
+                        commission = max(trade_amount * commision_rate, 5)
+                        # 卖出现金减去手续费
+                        net_income = trade_amount - commission
+                        # 卖出后清仓
+                        current_cash += net_income
                         print(
-                            f"{date.date()}: 卖出 {current_shares} 股，价格 {close_price:.2f}，总资金 {current_cash:.2f}")
+                            f"{date.date()}: 卖出 {current_shares} 股，价格 {trade_price:.2f}，总资金 {current_cash:.2f}")
                         current_shares = 0
 
                 # 更新资产数据
@@ -194,6 +209,21 @@ class MA20Strategy:
         buy_hold_return = (self.results['close'].iloc[-1] - self.results['close'].iloc[0]) / self.results['close'].iloc[
             0] * 100
 
+        # 日累计回报率
+        df = self.results
+        df['cumulative_return'] = (1 + df['total_assets'] / 100).cumprod()
+        # 日累计回报率的最大值
+        df['peak'] = df['cumulative_return'].cummax()
+        # 日回撤百分比序列
+        df['drawdown'] = 1 - df['cumulative_return'] / df['peak']
+
+        # 夏普比率
+        sharpe_ratio = ((df['total_assets'] / 100).mean() * 252) / ((df['total_assets'] / 100).std() * np.sqrt(252))
+
+        # # 索提诺比率
+        # downside_returns = df[df['total_assets'] / 100 < 0]['total_assets'] / 100
+        # sortino_ratio = ((df['total_assets'] / 100).mean() * 252) / (downside_returns.std() * np.sqrt(252))
+
         # 统计交易次数
         # 使用pandas的sum()方法，确保在Series上操作
         trade_signals = self.results['position'].abs() == 2
@@ -211,7 +241,9 @@ class MA20Strategy:
         print(f"总收益率: {total_return:.2f}%")
         print(f"年化收益率: {annual_return:.2f}%")
         print(f"买入持有策略收益率: {buy_hold_return:.2f}%")
-        print(f"总交易次数: {total_trades} 次 (买入: {buy_signals} 次, 卖出: {sell_signals} 次)")
+        print(f"总交易次数: {total_trades} 次 (买入: {buy_signals} 次, 卖出: {sell_signals} 次)\n")
+        print(f"夏普比率: {sharpe_ratio:.2f}%")
+        # print(f"索提诺比率: {sortino_ratio:.2f}%")
 
     def plot_results(self):
         """可视化策略结果"""
@@ -258,7 +290,7 @@ class MA20Strategy:
 # 示例用法
 if __name__ == "__main__":
     # 创建策略实例
-    strategy = MA20Strategy()
+    strategy = MA20Strategy(window=60)
 
     # 加载数据（这里使用模拟数据，实际使用时替换为真实数据路径）
     # 如果没有真实数据，可以将下面的generate_sample_data设为True生成模拟数据
@@ -307,7 +339,7 @@ if __name__ == "__main__":
     strategy.generate_signals()
 
     # 执行回测（初始资金100万）
-    strategy.backtest(initial_capital=1000000)
+    strategy.backtest()
 
     # 分析结果
     strategy.analyze_results()
